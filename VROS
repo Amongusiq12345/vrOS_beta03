@@ -1,0 +1,775 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>vrOS</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+*{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+:root{--c:#00f5ff;--g:#39ff14;--r:#ff073a;}
+
+html,body{
+  width:100%;height:100%;overflow:hidden;
+  background:#000;
+  font-family:'Share Tech Mono',monospace;
+  touch-action:none;
+}
+
+/* ── INTRO ── */
+#intro{
+  position:fixed;inset:0;z-index:999;
+  background:#000;
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:16px;padding:20px;
+}
+.logo{
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(60px,18vw,100px);
+  font-weight:900;color:var(--c);
+  letter-spacing:10px;
+  text-shadow:0 0 20px var(--c),0 0 50px rgba(0,245,255,.4);
+  animation:glow 2s ease-in-out infinite;
+}
+.sub{color:rgba(0,245,255,.4);font-size:11px;letter-spacing:2px;text-align:center;line-height:2;}
+
+/* Big camera button */
+#camBtn{
+  margin-top:8px;
+  width:200px;height:200px;
+  border-radius:50%;
+  border:3px solid var(--c);
+  background:rgba(0,245,255,.06);
+  display:flex;flex-direction:column;
+  align-items:center;justify-content:center;
+  gap:8px;
+  cursor:pointer;
+  box-shadow:0 0 40px rgba(0,245,255,.3),inset 0 0 40px rgba(0,245,255,.05);
+  transition:all .2s;
+  position:relative;overflow:hidden;
+}
+#camBtn:active{
+  background:rgba(0,245,255,.15);
+  box-shadow:0 0 60px rgba(0,245,255,.5);
+  transform:scale(.96);
+}
+#camBtn .cam-icon{font-size:56px;}
+#camBtn .cam-label{
+  font-family:'Orbitron',sans-serif;
+  font-size:11px;letter-spacing:3px;color:var(--c);
+}
+/* Pulse ring on button */
+#camBtn::before{
+  content:'';position:absolute;
+  width:100%;height:100%;
+  border-radius:50%;
+  border:2px solid rgba(0,245,255,.3);
+  animation:pulseRing 2s ease-out infinite;
+}
+#camBtn::after{
+  content:'';position:absolute;
+  width:100%;height:100%;
+  border-radius:50%;
+  border:2px solid rgba(0,245,255,.15);
+  animation:pulseRing 2s ease-out .7s infinite;
+}
+
+/* Hidden file input */
+#fileIn{
+  position:absolute;
+  width:0;height:0;opacity:0;
+}
+
+.note{
+  color:rgba(255,255,255,.2);
+  font-size:10px;letter-spacing:1px;
+  text-align:center;line-height:1.8;
+  max-width:280px;
+}
+.note b{color:rgba(0,245,255,.5);}
+
+/* ── APP ── */
+#app{display:none;position:fixed;inset:0;}
+
+/* VR split */
+#vr{position:absolute;inset:0;display:flex;}
+.eye{flex:1;position:relative;overflow:hidden;}
+.eye+.eye{border-left:4px solid #0a0a0a;}
+
+.eyeCanvas{
+  position:absolute;inset:0;
+  width:100%;height:100%;
+  object-fit:cover;
+}
+
+/* Lens vignette */
+.vignette{
+  position:absolute;inset:0;
+  background:radial-gradient(ellipse at center,transparent 35%,rgba(0,0,0,.88) 100%);
+  pointer-events:none;z-index:2;
+}
+
+/* HUD */
+.hud{position:absolute;inset:0;pointer-events:none;z-index:3;}
+.c{position:absolute;width:16px;height:16px;}
+.tl{top:8px;left:8px;border-top:2px solid var(--c);border-left:2px solid var(--c);}
+.tr{top:8px;right:8px;border-top:2px solid var(--c);border-right:2px solid var(--c);}
+.bl{bottom:50px;left:8px;border-bottom:2px solid var(--c);border-left:2px solid var(--c);}
+.br{bottom:50px;right:8px;border-bottom:2px solid var(--c);border-right:2px solid var(--c);}
+.xhair{
+  position:absolute;top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  width:28px;height:28px;opacity:.5;
+}
+.xhair::before,.xhair::after{content:'';position:absolute;background:var(--c);}
+.xhair::before{width:1px;height:100%;left:50%;transform:translateX(-50%);}
+.xhair::after{height:1px;width:100%;top:50%;transform:translateY(-50%);}
+.eye-id{
+  position:absolute;top:10px;left:50%;transform:translateX(-50%);
+  font-size:8px;color:rgba(0,245,255,.5);letter-spacing:2px;
+  display:flex;align-items:center;gap:4px;
+}
+.ld{width:4px;height:4px;background:var(--g);border-radius:50%;animation:blink 1s infinite;}
+
+/* Nose bridge */
+#bridge{
+  position:absolute;left:50%;top:50%;
+  transform:translate(-50%,-50%);
+  width:38px;height:68px;
+  background:#000;border-radius:50%;
+  z-index:10;border:2px solid #111;
+}
+
+/* Bottom bar */
+#bar{
+  position:fixed;bottom:0;left:0;right:0;z-index:20;
+  display:flex;flex-direction:column;align-items:center;
+  padding-bottom:env(safe-area-inset-bottom,6px);
+  pointer-events:none;
+}
+#gLabel{
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(8px,2.2vw,12px);
+  letter-spacing:3px;color:var(--c);
+  text-shadow:0 0 10px var(--c);
+  margin-bottom:3px;min-height:18px;
+}
+#strip{
+  display:flex;width:100%;
+  background:rgba(0,0,0,.85);
+  border-top:1px solid rgba(0,245,255,.12);
+  backdrop-filter:blur(10px);
+  justify-content:space-around;
+  padding:5px 4px;
+  pointer-events:all;
+}
+.sb{
+  display:flex;flex-direction:column;align-items:center;gap:2px;
+  padding:5px 8px;
+  border:1px solid rgba(0,245,255,.1);border-radius:8px;
+  cursor:pointer;min-width:48px;
+  touch-action:manipulation;background:transparent;
+}
+.sb:active{background:rgba(0,245,255,.1);border-color:var(--c);}
+.sb .i{font-size:18px;}
+.sb .l{font-size:7px;color:rgba(0,245,255,.55);letter-spacing:1px;}
+
+/* Motion indicator */
+#motionBar{
+  position:fixed;top:0;left:0;right:0;height:3px;z-index:25;
+  pointer-events:none;
+}
+#motionFill{height:100%;width:0%;background:var(--c);transition:width .1s;box-shadow:0 0 8px var(--c);}
+
+/* Burst feedback */
+#burst{
+  position:fixed;top:38%;left:50%;
+  transform:translate(-50%,-50%);
+  z-index:30;pointer-events:none;
+  text-align:center;opacity:0;transition:opacity .25s;
+}
+#burst.show{opacity:1;}
+#bIco{font-size:56px;}
+#bTxt{
+  font-family:'Orbitron',sans-serif;
+  font-size:15px;color:var(--c);
+  text-shadow:0 0 18px var(--c);
+  letter-spacing:4px;margin-top:4px;
+}
+
+/* Ring */
+#ring{
+  position:fixed;top:50%;left:50%;
+  width:90px;height:90px;
+  transform:translate(-50%,-50%);
+  border-radius:50%;border:2px solid var(--c);
+  z-index:25;pointer-events:none;
+  opacity:0;
+  box-shadow:0 0 20px var(--c);
+}
+#ring.pop{animation:ringPop .65s ease-out forwards;}
+
+/* Motion skeleton overlay canvas */
+#skelCanvas{
+  position:fixed;inset:0;
+  width:100%;height:100%;
+  pointer-events:none;z-index:6;
+}
+
+/* ── MODAL ── */
+#modal{
+  position:fixed;inset:0;z-index:50;
+  display:none;flex-direction:column;background:#000;
+}
+#modal.open{display:flex;}
+#mHead{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 18px;
+  border-bottom:1px solid rgba(0,245,255,.12);
+  background:rgba(0,245,255,.03);
+}
+#mTitle{font-family:'Orbitron',sans-serif;font-size:13px;color:var(--c);letter-spacing:3px;}
+#mClose{
+  background:none;border:1px solid rgba(0,245,255,.2);
+  color:var(--c);padding:5px 14px;
+  font-family:'Share Tech Mono',monospace;font-size:12px;
+  cursor:pointer;border-radius:4px;
+}
+#mBody{flex:1;overflow:auto;padding:18px;}
+
+/* Clock */
+#clkT{
+  font-family:'Orbitron',sans-serif;
+  font-size:clamp(48px,16vw,90px);
+  color:var(--c);text-shadow:0 0 28px var(--c);
+  letter-spacing:2px;text-align:center;margin-top:14vh;
+}
+#clkD{text-align:center;color:rgba(0,245,255,.35);font-size:11px;letter-spacing:3px;margin-top:8px;}
+
+/* Settings */
+.sRow{
+  display:flex;justify-content:space-between;align-items:center;
+  padding:14px 16px;margin-bottom:10px;
+  background:rgba(0,245,255,.03);
+  border:1px solid rgba(0,245,255,.1);border-radius:8px;
+}
+.sName{color:var(--c);font-size:12px;}
+.tog{
+  width:42px;height:22px;
+  background:rgba(0,245,255,.07);
+  border:1px solid rgba(0,245,255,.2);
+  border-radius:11px;position:relative;cursor:pointer;transition:all .3s;
+}
+.tog.on{background:rgba(0,245,255,.22);border-color:var(--c);}
+.tog::after{
+  content:'';position:absolute;top:2px;left:2px;
+  width:16px;height:16px;background:var(--c);
+  border-radius:50%;transition:transform .3s;
+  box-shadow:0 0 6px var(--c);
+}
+.tog.on::after{transform:translateX(20px);}
+
+/* Music */
+.mpW{display:flex;flex-direction:column;align-items:center;gap:18px;padding:16px 0;}
+.mpA{
+  width:140px;height:140px;
+  background:linear-gradient(135deg,rgba(0,245,255,.12),rgba(57,255,20,.06));
+  border:2px solid var(--c);border-radius:14px;
+  display:flex;align-items:center;justify-content:center;font-size:56px;
+  box-shadow:0 0 36px rgba(0,245,255,.2);
+  animation:spin 20s linear infinite;
+}
+.mpN{font-family:'Orbitron',sans-serif;color:var(--c);font-size:14px;text-align:center;}
+.mpAr{color:rgba(0,245,255,.35);font-size:10px;letter-spacing:2px;text-align:center;margin-top:3px;}
+.mpPb{width:72%;height:3px;background:rgba(0,245,255,.1);border-radius:2px;overflow:hidden;}
+.mpPf{height:100%;background:var(--c);box-shadow:0 0 6px var(--c);animation:prog 30s linear infinite;}
+.mpC{display:flex;gap:28px;align-items:center;}
+.mpB{background:none;border:none;color:var(--c);font-size:20px;cursor:pointer;opacity:.8;}
+.mpP{
+  width:50px;height:50px;border:2px solid var(--c)!important;
+  border-radius:50%;display:flex;align-items:center;justify-content:center;
+  font-size:18px;box-shadow:0 0 16px rgba(0,245,255,.3);
+}
+
+/* Animations */
+@keyframes glow{
+  0%,100%{text-shadow:0 0 20px var(--c),0 0 50px rgba(0,245,255,.4);}
+  50%{text-shadow:0 0 8px var(--c),0 0 18px rgba(0,245,255,.2);}
+}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes pulseRing{
+  0%{transform:scale(1);opacity:.6}
+  100%{transform:scale(1.5);opacity:0}
+}
+@keyframes ringPop{
+  0%{opacity:1;transform:translate(-50%,-50%) scale(.4);}
+  60%{opacity:.7;}
+  100%{opacity:0;transform:translate(-50%,-50%) scale(2);}
+}
+@keyframes spin{0%{transform:rotate(0)}100%{transform:rotate(360deg)}}
+@keyframes prog{0%{width:0}100%{width:100%}}
+</style>
+</head>
+<body>
+
+<!-- ══ INTRO ══ -->
+<div id="intro">
+  <div class="logo">vrOS</div>
+  <div class="sub">HAND TRACKING · SPLIT VR · iOS<br>DOTKNIJ ABY WŁĄCZYĆ KAMERĘ</div>
+
+  <!-- Wielki przycisk kamery — klikany przez użytkownika -->
+  <div id="camBtn" onclick="document.getElementById('fileIn').click()">
+    <div class="cam-icon">📷</div>
+    <div class="cam-label">KAMERA</div>
+  </div>
+
+  <!--
+    capture="user"  = przednia kamera
+    capture="environment" = tylna kamera
+    Używamy "environment" dla VR (tylna)
+    Na iOS: input[type=file][accept="video/*"][capture] otwiera kamerę BEZ potrzeby HTTPS!
+  -->
+  <input id="fileIn" type="file" accept="video/*" capture="environment">
+
+  <div class="note">
+    Naciśnij przycisk → iOS otworzy <b>kamerę</b><br>
+    Nagraj krótki film → vrOS go załaduje<br>
+    <span style="color:rgba(0,245,255,.25)">Tryb live: wymaga HTTPS (np. ngrok)</span>
+  </div>
+
+  <div style="display:flex;gap:12px;margin-top:4px;">
+    <button onclick="tryLiveCamera()" style="
+      padding:10px 20px;background:transparent;
+      border:2px solid var(--c);color:var(--c);
+      font-family:'Orbitron',sans-serif;font-size:11px;
+      letter-spacing:3px;cursor:pointer;border-radius:6px;
+    ">▶ LIVE CAM</button>
+    <button onclick="launchDemo()" style="
+      padding:10px 20px;background:transparent;
+      border:1px solid rgba(0,245,255,.3);color:rgba(0,245,255,.5);
+      font-family:'Share Tech Mono',monospace;font-size:11px;
+      letter-spacing:2px;cursor:pointer;border-radius:6px;
+    ">DEMO</button>
+  </div>
+
+  <div id="errMsg" style="color:var(--r);font-size:10px;letter-spacing:2px;text-align:center;min-height:14px;"></div>
+</div>
+
+<!-- ══ APP ══ -->
+<div id="app">
+  <div id="vr">
+    <div class="eye">
+      <canvas class="eyeCanvas" id="cL"></canvas>
+      <div class="vignette"></div>
+      <div class="hud">
+        <div class="c tl"></div><div class="c tr"></div>
+        <div class="c bl"></div><div class="c br"></div>
+        <div class="xhair"></div>
+        <div class="eye-id"><span class="ld"></span>CAM·L</div>
+      </div>
+    </div>
+    <div class="eye">
+      <canvas class="eyeCanvas" id="cR"></canvas>
+      <div class="vignette"></div>
+      <div class="hud">
+        <div class="c tl"></div><div class="c tr"></div>
+        <div class="c bl"></div><div class="c br"></div>
+        <div class="xhair"></div>
+        <div class="eye-id"><span class="ld"></span>CAM·R</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="bridge"></div>
+  <canvas id="skelCanvas"></canvas>
+
+  <div id="motionBar"><div id="motionFill"></div></div>
+
+  <div id="ring"></div>
+  <div id="burst"><div id="bIco"></div><div id="bTxt"></div></div>
+
+  <div id="bar">
+    <div id="gLabel">◈ INICJALIZACJA</div>
+    <div id="strip">
+      <div class="sb" onclick="openApp('clock')"><div class="i">🕐</div><div class="l">ZEGAR</div></div>
+      <div class="sb" onclick="openApp('music')"><div class="i">🎵</div><div class="l">MUZYKA</div></div>
+      <div class="sb" onclick="snapEffect()"><div class="i">📸</div><div class="l">SNAP</div></div>
+      <div class="sb" onclick="openApp('settings')"><div class="i">⚙️</div><div class="l">OPCJE</div></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══ MODAL ══ -->
+<div id="modal">
+  <div id="mHead">
+    <div id="mTitle">APP</div>
+    <button id="mClose" onclick="closeModal()">✕ WRÓĆ</button>
+  </div>
+  <div id="mBody"></div>
+</div>
+
+<script>
+// ── Canvases ──
+const cL = document.getElementById('cL');
+const cR = document.getElementById('cR');
+const ctxL = cL.getContext('2d');
+const ctxR = cR.getContext('2d');
+const skelC = document.getElementById('skelCanvas');
+const skelCtx = skelC.getContext('2d');
+
+let videoEl = null;
+let isLive = false;
+let animRunning = false;
+let prevGray = null;
+let gestureDebounce = 0;
+let motionPoints = []; // tracked motion blobs
+
+// ── File input (video from camera roll / recorded) ──
+document.getElementById('fileIn').addEventListener('change', function(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const url = URL.createObjectURL(file);
+  const v = document.createElement('video');
+  v.src = url;
+  v.autoplay = true;
+  v.loop = true;
+  v.muted = true;
+  v.playsInline = true;
+  v.play();
+  v.addEventListener('loadeddata', () => launchApp(v, false));
+});
+
+// ── Live camera (works on HTTPS or localhost) ──
+async function tryLiveCamera() {
+  document.getElementById('errMsg').textContent = '';
+  try {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: { ideal:'environment' }, width:{ideal:640}, height:{ideal:480} },
+      audio: false
+    });
+    const v = document.createElement('video');
+    v.srcObject = stream;
+    v.autoplay = true; v.muted = true; v.playsInline = true;
+    await v.play();
+    launchApp(v, true);
+  } catch(err) {
+    const msg = err.name === 'NotAllowedError'
+      ? '⚠ ODMOWA DOSTĘPU — sprawdź ustawienia przeglądarki'
+      : err.name === 'NotSupportedError' || err.name === 'SecurityError'
+      ? '⚠ WYMAGANY HTTPS — użyj przycisku KAMERA'
+      : '⚠ ' + err.message;
+    document.getElementById('errMsg').textContent = msg;
+  }
+}
+
+// ── Demo mode ──
+function launchDemo() {
+  // Black canvas demo with fake motion blobs
+  const v = null;
+  launchApp(v, false, true);
+}
+
+// ── Launch main app ──
+function launchApp(v, live, demo=false) {
+  videoEl = v;
+  isLive = live;
+  document.getElementById('intro').style.display = 'none';
+  document.getElementById('app').style.display = 'block';
+
+  resize();
+  window.addEventListener('resize', resize);
+
+  if (demo) {
+    runDemoMode();
+  } else {
+    startRenderLoop();
+  }
+  setLabel('◈ POKAŻ RĘKĘ');
+}
+
+function resize() {
+  const W = window.innerWidth, H = window.innerHeight;
+  cL.width  = cR.width  = W / 2;
+  cL.height = cR.height = H;
+  skelC.width = W; skelC.height = H;
+}
+
+// ── Main render loop ──
+function startRenderLoop() {
+  if (animRunning) return;
+  animRunning = true;
+
+  let lastPixels = null;
+
+  function frame() {
+    if (!videoEl) { requestAnimationFrame(frame); return; }
+
+    const W = cL.width, H = cL.height;
+
+    // Draw mirrored video to both canvases
+    [ctxL, ctxR].forEach(ctx => {
+      ctx.save();
+      ctx.translate(W, 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(videoEl, 0, 0, W, H);
+      ctx.restore();
+    });
+
+    // Motion analysis on small offscreen canvas
+    const offW = 80, offH = 60;
+    const off = document.createElement('canvas');
+    off.width = offW; off.height = offH;
+    const octx = off.getContext('2d');
+    octx.drawImage(videoEl, 0, 0, offW, offH);
+    const cur = octx.getImageData(0, 0, offW, offH);
+
+    if (lastPixels) {
+      analyzeMotion(cur, lastPixels, offW, offH, W, H);
+    }
+    lastPixels = cur;
+
+    requestAnimationFrame(frame);
+  }
+  frame();
+}
+
+// ── Motion detection + glow blobs ──
+function analyzeMotion(cur, prev, sw, sh, dw, dh) {
+  const scaleX = dw / sw;
+  const scaleY = dh / sh;
+
+  let totalMotion = 0;
+  const blobs = [];
+
+  for (let y = 0; y < sh; y++) {
+    for (let x = 0; x < sw; x++) {
+      const i = (y * sw + x) * 4;
+      const dr = Math.abs(cur.data[i]   - prev.data[i]);
+      const dg = Math.abs(cur.data[i+1] - prev.data[i+1]);
+      const db = Math.abs(cur.data[i+2] - prev.data[i+2]);
+      const diff = (dr + dg + db) / 3;
+      if (diff > 20) {
+        totalMotion += diff;
+        blobs.push({ x: x * scaleX, y: y * scaleY, strength: diff });
+      }
+    }
+  }
+
+  // Draw glow blobs on both eyes
+  skelCtx.clearRect(0, 0, skelC.width, skelC.height);
+
+  const totalW = skelC.width;
+  const half = totalW / 2;
+
+  blobs.forEach(b => {
+    const alpha = Math.min(b.strength / 80, 0.85);
+    const r = 8 + b.strength / 12;
+
+    // Draw on left half
+    drawGlowBlob(skelCtx, b.x, b.y, r, alpha);
+    // Draw on right half (mirrored x offset)
+    drawGlowBlob(skelCtx, half + b.x, b.y, r, alpha);
+  });
+
+  // Motion bar
+  const mag = totalMotion / (sw * sh);
+  const pct = Math.min(mag / 15 * 100, 100);
+  document.getElementById('motionFill').style.width = pct + '%';
+
+  // Gesture trigger
+  if (mag > 8) {
+    const now = Date.now();
+    if (now - gestureDebounce > 1500) {
+      gestureDebounce = now;
+      classifyByMotion(mag, blobs, dw, dh);
+    }
+  } else if (pct < 5) {
+    setLabel('◈ POKAŻ RĘKĘ');
+  }
+}
+
+function drawGlowBlob(ctx, x, y, r, alpha) {
+  // Outer glow
+  const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 2.5);
+  grad.addColorStop(0, `rgba(0,245,255,${alpha * 0.6})`);
+  grad.addColorStop(0.4, `rgba(0,245,255,${alpha * 0.25})`);
+  grad.addColorStop(1, 'rgba(0,245,255,0)');
+  ctx.beginPath();
+  ctx.arc(x, y, r * 2.5, 0, Math.PI * 2);
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Core bright dot
+  ctx.beginPath();
+  ctx.arc(x, y, r * 0.4, 0, Math.PI * 2);
+  ctx.fillStyle = `rgba(255,255,255,${alpha * 0.9})`;
+  ctx.fill();
+}
+
+// ── Gesture classification by motion shape ──
+function classifyByMotion(mag, blobs, W, H) {
+  if (blobs.length === 0) return;
+
+  // Find bounding box of motion
+  let minX = W, maxX = 0, minY = H, maxY = 0;
+  blobs.forEach(b => {
+    minX = Math.min(minX, b.x); maxX = Math.max(maxX, b.x);
+    minY = Math.min(minY, b.y); maxY = Math.max(maxY, b.y);
+  });
+
+  const bW = maxX - minX;
+  const bH = maxY - minY;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+
+  let icon, txt;
+
+  if (mag > 30) {
+    icon = '💨'; txt = 'SZYBKI RUCH';
+    snapEffect();
+  } else if (mag > 18) {
+    if (bW > bH * 1.5) { icon = cx < W/2 ? '👈' : '👉'; txt = cx < W/2 ? 'LEWO' : 'PRAWO'; }
+    else if (bH > bW * 1.2) { icon = cy < H/2 ? '👆' : '👇'; txt = cy < H/2 ? 'GÓRA' : 'DÓŁ'; }
+    else { icon = '🖐'; txt = 'OTWARTA DŁOŃ'; openApp('clock'); }
+  } else {
+    icon = '✋'; txt = 'WYKRYTO RUCH';
+  }
+
+  setLabel('◉ ' + txt);
+  showBurst(icon, txt);
+  ringPop();
+  setTimeout(() => setLabel('◈ POKAŻ RĘKĘ'), 2000);
+}
+
+// ── Demo mode ──
+function runDemoMode() {
+  // Draw dark grid background
+  [ctxL, ctxR].forEach(ctx => {
+    const W = ctx.canvas.width, H = ctx.canvas.height;
+    ctx.fillStyle = '#050d0d';
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = 'rgba(0,245,255,0.04)';
+    ctx.lineWidth = 1;
+    for(let x=0;x<W;x+=25){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+    for(let y=0;y<H;y+=25){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  });
+
+  setLabel('◈ TRYB DEMO');
+  showBurst('🤖','DEMO MODE');
+
+  // Fake animated blobs
+  const W = skelC.width, H = skelC.height;
+  let t = 0;
+  function demoFrame() {
+    skelCtx.clearRect(0, 0, W, H);
+    t += 0.04;
+
+    const points = [
+      {x: W*0.2 + Math.sin(t)*40, y: H*0.4 + Math.cos(t*0.7)*30},
+      {x: W*0.25 + Math.sin(t+1)*20, y: H*0.5 + Math.cos(t+0.5)*25},
+      {x: W*0.18 + Math.sin(t+2)*15, y: H*0.35 + Math.cos(t+1)*20},
+    ];
+    points.forEach(p => drawGlowBlob(skelCtx, p.x, p.y, 14, 0.6));
+    points.forEach(p => drawGlowBlob(skelCtx, p.x + W/2, p.y, 14, 0.6));
+
+    requestAnimationFrame(demoFrame);
+  }
+  demoFrame();
+}
+
+// ── Helpers ──
+function setLabel(t) { document.getElementById('gLabel').textContent = t; }
+
+function showBurst(ico, txt) {
+  document.getElementById('bIco').textContent = ico;
+  document.getElementById('bTxt').textContent = txt;
+  const b = document.getElementById('burst');
+  b.classList.add('show');
+  setTimeout(() => b.classList.remove('show'), 1800);
+}
+
+function ringPop() {
+  const r = document.getElementById('ring');
+  r.classList.remove('pop');
+  void r.offsetWidth;
+  r.classList.add('pop');
+}
+
+function snapEffect() {
+  const f = document.createElement('div');
+  f.style.cssText='position:fixed;inset:0;background:#fff;z-index:200;pointer-events:none;';
+  document.body.appendChild(f);
+  f.animate([{opacity:.95},{opacity:0}],{duration:380}).onfinish=()=>f.remove();
+  showBurst('📸','SNAP!');
+}
+
+// ── Touch swipe ──
+let tx0, ty0;
+document.addEventListener('touchstart', e=>{ tx0=e.touches[0].clientX; ty0=e.touches[0].clientY; });
+document.addEventListener('touchend', e=>{
+  if(document.getElementById('modal').classList.contains('open')) return;
+  const dx=e.changedTouches[0].clientX-tx0, dy=e.changedTouches[0].clientY-ty0;
+  const d=Math.hypot(dx,dy);
+  if(d<10){showBurst('✅','TAP');ringPop();}
+  else if(d>50){
+    const s=[
+      {c:dx>0&&Math.abs(dx)>Math.abs(dy),i:'👉',t:'PRAWO'},
+      {c:dx<0&&Math.abs(dx)>Math.abs(dy),i:'👈',t:'LEWO'},
+      {c:dy<0&&Math.abs(dy)>Math.abs(dx),i:'👆',t:'GÓRA'},
+      {c:dy>0&&Math.abs(dy)>Math.abs(dx),i:'👇',t:'DÓŁ'}
+    ].find(x=>x.c);
+    if(s){showBurst(s.i,s.t);ringPop();}
+  }
+});
+
+// ── Apps ──
+function openApp(name) {
+  const modal=document.getElementById('modal');
+  const body=document.getElementById('mBody');
+  const title=document.getElementById('mTitle');
+  modal.classList.add('open');
+  clearInterval(window._clk);
+
+  if(name==='clock'){
+    title.textContent='⬡ ZEGAR';
+    body.innerHTML=`<div id="clkT"></div><div id="clkD"></div>`;
+    const tick=()=>{
+      const n=new Date();
+      const t=n.toLocaleTimeString('pl-PL',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+      const d=n.toLocaleDateString('pl-PL',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+      const ct=document.getElementById('clkT');if(ct)ct.textContent=t;
+      const cd=document.getElementById('clkD');if(cd)cd.textContent=d.toUpperCase();
+    };
+    tick(); window._clk=setInterval(tick,1000);
+  }
+  else if(name==='music'){
+    title.textContent='⬡ MUZYKA';
+    body.innerHTML=`<div class="mpW">
+      <div class="mpA">🎧</div>
+      <div><div class="mpN">NEURAL WAVE 01</div><div class="mpAr">SYNTHCORE · 2049</div></div>
+      <div class="mpPb"><div class="mpPf"></div></div>
+      <div class="mpC">
+        <button class="mpB">⏮</button>
+        <button class="mpB mpP">⏵</button>
+        <button class="mpB">⏭</button>
+      </div></div>`;
+  }
+  else if(name==='settings'){
+    title.textContent='⬡ USTAWIENIA';
+    body.innerHTML=['Hand Tracking','Split VR View','Glow Effect','Gesture Actions','Night Mode']
+      .map((n,i)=>`<div class="sRow"><div class="sName">${n}</div>
+        <div class="tog ${i<4?'on':''}" onclick="this.classList.toggle('on')"></div></div>`).join('');
+  }
+}
+
+function closeModal(){
+  document.getElementById('modal').classList.remove('open');
+  clearInterval(window._clk);
+}
+</script>
+</body>
+</html>
